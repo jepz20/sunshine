@@ -33,6 +33,7 @@ public class ForecastFragment extends Fragment implements LoaderManager.LoaderCa
     private static final String LOG_TAG = ForecastFragment.class.getSimpleName();
     private static final int FORECAST_LOADER = 0;
     private ListView mListview;
+    private View rootView;
     private boolean mUseTodayLayout;
     public static final String POSITION = "position";
     private String mLocation;
@@ -106,7 +107,7 @@ public class ForecastFragment extends Fragment implements LoaderManager.LoaderCa
         //custom CursorAdapter
         mForecastAdapter = new ForecastAdapter(getActivity(), null, 0);
         mForecastAdapter.setUseTodayLayout(mUseTodayLayout);
-        View rootView = inflater.inflate(R.layout.fragment_my, container, false);
+        rootView = inflater.inflate(R.layout.fragment_my, container, false);
 
         mListview = (ListView) rootView.findViewById(R.id.listview_forecast);
         mListview.setAdapter(mForecastAdapter);
@@ -122,10 +123,12 @@ public class ForecastFragment extends Fragment implements LoaderManager.LoaderCa
 
             }
         });
+
         if (savedInstanceState != null && savedInstanceState.containsKey(POSITION))
         {
             mPosition = savedInstanceState.getInt(POSITION);
         }
+
         return rootView;
     }
 
@@ -189,6 +192,13 @@ public class ForecastFragment extends Fragment implements LoaderManager.LoaderCa
         mForecastAdapter.swapCursor(data);
         if (mPosition != ListView.INVALID_POSITION) {
             mListview.setSelection(mPosition);
+        } else {
+            mListview.post(new Runnable() {
+                @Override
+                public void run() {
+                    mListview.performItemClick(rootView, 0, mListview.getAdapter().getItemId(0));
+                }
+            });
         }
     }
 
