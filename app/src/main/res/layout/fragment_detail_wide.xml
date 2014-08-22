@@ -1,0 +1,103 @@
+<ScrollView
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:orientation="horizontal"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:padding="16dp">
+
+        <LinearLayout
+            android:minWidth="56dp"
+            android:layout_height="wrap_content"
+            android:layout_width="wrap_content"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="120dp"
+                android:textSize="24sp"
+                android:fontFamily="sans-serif-condensed"
+                android:id="@+id/detail_day_textview"/>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:id="@+id/detail_date_textview"
+                android:textColor="@color/light_grey"
+                android:textSize="20sp"
+                android:fontFamily="sans-serif-condensed"/>
+        </LinearLayout>
+
+
+        <LinearLayout
+            android:orientation="vertical"
+            android:layout_width="wrap_content"
+            android:layout_marginLeft="16dp"
+            android:layout_height="wrap_content">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:id="@+id/detail_max_temp_textview"
+                android:textSize="96sp"
+                android:fontFamily="sans-serif-light"/>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:id="@+id/detail_min_temp_textview"
+                android:textColor="@color/light_grey"
+                android:textSize="48sp"
+                android:fontFamily="sans-serif-light"
+                android:layout_marginLeft="8dp"/>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:id="@+id/detail_humidty_textview"
+                android:textAppearance="?android:textAppearanceLarge"
+                android:layout_marginTop="4dp"
+                android:fontFamily="sans-serif-condensed"/>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:id="@+id/detail_wind_textview"
+                android:textAppearance="?android:textAppearanceLarge"
+                android:layout_marginTop="4dp"
+                android:fontFamily="sans-serif-condensed"/>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:id="@+id/detail_pressure_textview"
+                android:textAppearance="?android:textAppearanceLarge"
+                android:layout_marginTop="4dp"
+                android:fontFamily="sans-serif-condensed"/>
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginLeft="16dp"
+            android:gravity="center_horizontal"
+            android:orientation="vertical">
+            <ImageView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:id="@+id/detail_icon_imageview"/>
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:id="@+id/detail_desc_textview"
+                android:textAppearance="?android:textAppearanceLarge"
+                android:textColor="@color/light_grey"
+                android:fontFamily="sans-serif-condensed"/>
+        </LinearLayout>
+    </LinearLayout>
+</ScrollView>
