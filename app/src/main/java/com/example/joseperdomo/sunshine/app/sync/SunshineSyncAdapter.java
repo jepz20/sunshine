@@ -1,20 +1,33 @@
-package com.example.joseperdomo.sunshine.app.service;
+package com.example.joseperdomo.sunshine.app.sync;
 
-import android.app.AlarmManager;
-import android.app.IntentService;
+import android.accounts.Account;
+import android.accounts.AccountManager;
+import android.app.NotificationManager;
 import android.app.PendingIntent;
-import android.content.BroadcastReceiver;
+import android.content.AbstractThreadedSyncAdapter;
+import android.content.ContentProviderClient;
+import android.content.ContentResolver;
 import android.content.ContentUris;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
+import android.content.SyncRequest;
+import android.content.SyncResult;
 import android.database.Cursor;
 import android.net.Uri;
-import android.os.SystemClock;
+import android.os.Build;
+import android.os.Bundle;
+import android.preference.PreferenceManager;
+import android.support.v4.app.NotificationCompat;
+import android.support.v4.app.TaskStackBuilder;
 import android.util.Log;
 
+import com.example.joseperdomo.sunshine.app.MyActivity;
+import com.example.joseperdomo.sunshine.app.R;
+import com.example.joseperdomo.sunshine.app.Utility;
 import com.example.joseperdomo.sunshine.app.data.WeatherContract;
-
+import com.example.joseperdomo.sunshine.app.data.WeatherContract.WeatherEntry;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -25,28 +38,44 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.Calendar;
 import java.util.Date;
 import java.util.Vector;
 
 /**
- * Created by jose.perdomo on 22/08/2014.
- * ya no se usa pero lo dejo por referencia
+ * Created by jepz on 09-02-14.
  */
-public class SunshineService extends IntentService {
-    private final String LOG_TAG = SunshineService.class.getSimpleName();
+public class SunshineSyncAdapter extends AbstractThreadedSyncAdapter{
+
+    private final String LOG_TAG = SunshineSyncAdapter.class.getSimpleName();
     public static final String LOCATION_QUERY_EXTRA = "lqe";
+    // Interval at which to sync with the weather, in milliseconds.
+    // 60 seconds (1 minute) * 180 = 3 hours
+    public static final int SYNC_INTERVAL = 60 * 180;
+    public static final int SYNC_FLEXTIME = SYNC_INTERVAL/3;
 
-    public SunshineService() {
-        super("SunshineService");
-    }
+    private static final String[] NOTIFY_WEATHER_PROJECTION = new String[] {
+            WeatherEntry.COLUMN_WEATHER_ID,
+            WeatherEntry.COLUMN_MAX_TEMP,
+            WeatherEntry.COLUMN_MIN_TEMP,
+            WeatherEntry.COLUMN_SHORT_DESC
+    };
 
-    public SunshineService(String name) {
-        super(name);
-    }
+    // these indices must match the projection
+    private static final int INDEX_WEATHER_ID = 0;
+    private static final int INDEX_MAX_TEMP = 1;
+    private static final int INDEX_MIN_TEMP = 2;
+    private static final int INDEX_SHORT_DESC = 3;
+
+    private static final long DAY_IN_MILLIS = 1000 * 60 * 60 * 24;
+    private static final int WEATHER_NOTIFICATION_ID = 3004;
 
     @Override
-    protected void onHandleIntent(Intent intent) {
-        String locationQuery = intent.getStringExtra(LOCATION_QUERY_EXTRA);
+    public void onPerformSync(Account account, Bundle extras, String authority,
+                              ContentProviderClient provider, SyncResult syncResult) {
+
+
+        String locationQuery = Utility.getPreferredLocation(getContext());
         HttpURLConnection urlConnection  = null;
         BufferedReader reader = null;
         String forecastJsonStr = null;
@@ -237,17 +266,28 @@ public class SunshineService extends IntentService {
             weatherValues.put(WeatherContract.WeatherEntry.COLUMN_WEATHER_ID, weatherId);
 
             cVVector.add(weatherValues);
-
         }
-        int totalInserts = addWeather(cVVector);
-        Log.v(LOG_TAG, "Total Inserts: " + totalInserts);
+
+        if (cVVector.size() > 0) {
+            ContentValues[] values = new ContentValues[cVVector.size()];
+            cVVector.toArray(values);
+            getContext().getContentResolver().bulkInsert(WeatherEntry.CONTENT_URI, values);
+            Calendar cal = Calendar.getInstance();
+            cal.add(Calendar.DATE,-1);
+
+            String yesterdayDate = WeatherContract.getDbDateString(cal.getTime());
+            getContext().getContentResolver().delete(WeatherEntry.CONTENT_URI,// uri
+                    WeatherEntry.COLUMN_DATETEXT + "<= ?", //sel
+                    new String[] {yesterdayDate}); // selargs
+            notifyWeather();
+        }
         return null;
     }
 
     private long addLocation (String locationSetting, String cityName, double lat, double lon){
         Log.v(LOG_TAG, "inserting " + cityName + " with coord: " + lat + ", " + lon );
 
-        Cursor cursor = getContentResolver().query(WeatherContract.LocationEntry.CONTENT_URI,
+        Cursor cursor = getContext().getContentResolver().query(WeatherContract.LocationEntry.CONTENT_URI,
                 new String[]{WeatherContract.LocationEntry._ID},
                 WeatherContract.LocationEntry.COLUMN_LOCATION_SETTING + " = ?",
                 new String[]{locationSetting}, null);
@@ -264,28 +304,165 @@ public class SunshineService extends IntentService {
             locationValues.put(WeatherContract.LocationEntry.COLUMN_COORD_LAT, lat);
             locationValues.put(WeatherContract.LocationEntry.COLUMN_COORD_LONG, lon);
 
-            Uri locationUri = getContentResolver().insert(WeatherContract.LocationEntry.CONTENT_URI, locationValues);
+            Uri locationUri = getContext().getContentResolver().insert(WeatherContract.LocationEntry.CONTENT_URI, locationValues);
             return ContentUris.parseId(locationUri);
         }
     }
 
-    private int addWeather(Vector cvVector) {
-        if (cvVector.size() > 0) {
-            ContentValues[] values = new ContentValues[cvVector.size()];
-            cvVector.toArray(values);
-            return getContentResolver().bulkInsert(WeatherContract.WeatherEntry.CONTENT_URI, values);
+
+    public SunshineSyncAdapter(Context context, boolean autoInitialize) {
+        super(context, autoInitialize);
+    }
+
+
+    /**
+     * Helper method to have the sync adapter sync immediately
+     * @param context The context used to access the account service
+     */
+    public static void syncImmediately(Context context) {
+        Bundle bundle = new Bundle();
+        bundle.putBoolean(ContentResolver.SYNC_EXTRAS_EXPEDITED, true);
+        bundle.putBoolean(ContentResolver.SYNC_EXTRAS_MANUAL, true);
+        ContentResolver.requestSync(getSyncAccount(context),
+                context.getString(R.string.content_authority), bundle);
+    }
+
+    /**
+     * Helper method to get the fake account to be used with SyncAdapter, or make a new one
+     * if the fake account doesn't exist yet.  If we make a new account, we call the
+     * onAccountCreated method so we can initialize things.
+     *
+     * @param context The context used to access the account service
+     * @return a fake account.
+     */
+    public static Account getSyncAccount(Context context) {
+        // Get an instance of the Android account manager
+        AccountManager accountManager =
+                (AccountManager) context.getSystemService(Context.ACCOUNT_SERVICE);
+
+        // Create the account type and default account
+        Account newAccount = new Account(
+                context.getString(R.string.app_name), context.getString(R.string.sync_account_type));
+
+//        Log.v("SunshineSyncAdapter", accountManager.getPassword(newAccount));
+        // If the password doesn't exist, the account doesn't exist
+        if ( null == accountManager.getPassword(newAccount) ) {
+        /*
+         * Add the account and account type, no password or user data
+         * If successful, return the Account object, otherwise report an error.
+         */
+            if (!accountManager.addAccountExplicitly(newAccount, "", null)) {
+                return null;
+            }
+            /*
+             * If you don't set android:syncable="true" in
+             * in your <provider> element in the manifest,
+             * then call ContentResolver.setIsSyncable(account, AUTHORITY, 1)
+             * here.
+             */
+            onAccountCreated(newAccount,context);
+        }
+        return newAccount;
+    }
+
+    /**
+     * Helper method to schedule the sync adapter periodic execution
+     */
+    public static void configurePeriodicSync(Context context, int syncInterval, int flexTime) {
+        Account account = getSyncAccount(context);
+        String authority = context.getString(R.string.content_authority);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+            // we can enable inexact timers in our periodic sync
+            SyncRequest request = new SyncRequest.Builder().
+                    syncPeriodic(syncInterval, flexTime).
+                    setSyncAdapter(account, authority).build();
+            ContentResolver.requestSync(request);
         } else {
-            return 0;
+            ContentResolver.addPeriodicSync(account,
+                    authority, new Bundle(), syncInterval);
         }
     }
 
-    public static class AlarmReceiver extends BroadcastReceiver {
 
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            Intent sendIntent = new Intent(context, SunshineService.class);
-            sendIntent.putExtra(SunshineService.LOCATION_QUERY_EXTRA, intent.getStringExtra(SunshineService.LOCATION_QUERY_EXTRA));
-            context.startService(sendIntent);
+    private static void onAccountCreated(Account newAccount, Context context) {
+        /*
+         * Since we've created an account
+         */
+
+        SunshineSyncAdapter.configurePeriodicSync(context, SYNC_INTERVAL, SYNC_FLEXTIME);
+
+        /*
+         * Without calling setSyncAutomatically, our periodic sync will not be enabled.
+         */
+        ContentResolver.setSyncAutomatically(newAccount, context.getString(R.string.content_authority), true);
+
+        /*
+         * Finally, let's do a sync to get things started
+         */
+        syncImmediately(context);
+    }
+
+    public static void initializeSyncAdapter(Context context) {
+        getSyncAccount(context);
+    }
+
+    private void notifyWeather() {
+        Context context = getContext();
+        //checking the last update and notify if it' the first of the day
+
+        if (Utility.showNotifications(context)) {
+            SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
+            String lastNotificationKey = context.getString(R.string.pref_last_notification);
+            long lastSync = prefs.getLong(lastNotificationKey, 0);
+
+            if (System.currentTimeMillis() - lastSync >= DAY_IN_MILLIS) {
+                // Last sync was more than 1 day ago, let's send a notification with the weather.
+                String locationQuery = Utility.getPreferredLocation(context);
+
+                Uri weatherUri = WeatherEntry.buildWeatherLocationWithDate(locationQuery, WeatherContract.getDbDateString(new Date()));
+
+                // we'll query our contentProvider, as always
+                Cursor cursor = context.getContentResolver().query(weatherUri, NOTIFY_WEATHER_PROJECTION, null, null, null);
+
+                if (cursor.moveToFirst()) {
+                    int weatherId = cursor.getInt(INDEX_WEATHER_ID);
+                    double high = cursor.getDouble(INDEX_MAX_TEMP);
+                    double low = cursor.getDouble(INDEX_MIN_TEMP);
+                    String desc = cursor.getString(INDEX_SHORT_DESC);
+
+                    int iconId = Utility.getIconResourceForWeatherCondition(weatherId);
+                    String title = context.getString(R.string.app_name);
+
+                    // Define the text of the forecast.
+                    String contentText = String.format(context.getString(R.string.format_notification),
+                            desc,
+                            Utility.formatTemperature(context, high, Utility.isMetric(context)),
+                            Utility.formatTemperature(context, low, Utility.isMetric(context)));
+
+                    //build your notification here.
+                    NotificationCompat.Builder mBuilder = new NotificationCompat.Builder(getContext())
+                            .setSmallIcon(iconId)
+                            .setContentTitle(title)
+                            .setContentText(contentText);
+
+                    Intent resultIntent = new Intent(context, MyActivity.class);
+                    TaskStackBuilder stackBuilder = TaskStackBuilder.create(context);
+                    stackBuilder.addNextIntent(resultIntent);
+                    PendingIntent resultPendingIntent = stackBuilder.getPendingIntent(
+                            0, PendingIntent.FLAG_UPDATE_CURRENT);
+
+                    mBuilder.setContentIntent(resultPendingIntent);
+
+                    NotificationManager mNotificationManager =
+                            (NotificationManager) getContext().getSystemService(context.NOTIFICATION_SERVICE);
+
+                    mNotificationManager.notify(WEATHER_NOTIFICATION_ID, mBuilder.build());
+                    //refreshing last sync
+                    SharedPreferences.Editor editor = prefs.edit();
+                    editor.putLong(lastNotificationKey, System.currentTimeMillis());
+                    editor.commit();
+                }
+            }
         }
     }
 }

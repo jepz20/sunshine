@@ -14,6 +14,8 @@ import com.example.joseperdomo.sunshine.app.data.WeatherContract;
 /**
  * {@link ForecastAdapter} exposes a list of weather forecasts
  * from a {@link android.database.Cursor} to a {@link -ListView}.
+ *
+ * ya no se usa, pero lo dejo por referencia
  */
 public class ForecastAdapter extends CursorAdapter {
     public ForecastAdapter(Context context, Cursor c, int flags) {

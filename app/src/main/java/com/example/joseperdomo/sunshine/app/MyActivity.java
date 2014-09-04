@@ -10,6 +10,8 @@ import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 
+import com.example.joseperdomo.sunshine.app.sync.SunshineSyncAdapter;
+
 
 public class MyActivity extends ActionBarActivity implements ForecastFragment.Callback {
     private final String LOG_TAG = MyActivity.class.getSimpleName();
@@ -35,6 +37,8 @@ public class MyActivity extends ActionBarActivity implements ForecastFragment.Ca
         ForecastFragment forecastFragment = ((ForecastFragment) getSupportFragmentManager()
                 .findFragmentById(R.id.fragment_forecast));
         forecastFragment.setUseTodayLayout(!mTwoPane);
+        Log.v("MyActivity", "Antes de hacer el sync inicial");
+        SunshineSyncAdapter.initializeSyncAdapter(this);
     }
 
     @Override
@@ -104,27 +108,7 @@ public class MyActivity extends ActionBarActivity implements ForecastFragment.Ca
             startActivity(viewSettings);
             return true;
         }
-        if (id == R.id.action_map) {
-            openPreferredLocationInMap();
-            return true;
-        }
         return super.onOptionsItemSelected(item);
     }
 
-    private void openPreferredLocationInMap () {
-        SharedPreferences pref = PreferenceManager.getDefaultSharedPreferences(this);
-        String location = pref.getString(getString(R.string.pref_location_key),
-                getString(R.string.pref_location_default));
-        Intent intent = new Intent(Intent.ACTION_VIEW);
-        Uri loc = Uri.parse("geo:0,0?").buildUpon()
-                .appendQueryParameter("q", location)
-                .build();
-        intent.setData(loc);
-        if (intent.resolveActivity(getPackageManager())!= null) {
-            startActivity(intent);
-        } else {
-            Log.d(LOG_TAG, "Couldn't call " + location + ":(" );
-        }
-
-    }
 }

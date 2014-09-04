@@ -143,7 +143,13 @@ public class Utility {
                 .equals(context.getString(R.string.pref_unit_metric));
     }
 
-    static String formatTemperature(Context context, double temperature, boolean isMetric) {
+    public static boolean showNotifications(Context context) {
+        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
+        return prefs.getBoolean(context.getString(R.string.pref_enable_notifications_key),
+                Boolean.parseBoolean(context.getString(R.string.pref_enable_notifications_default)));
+    }
+
+    public static String formatTemperature(Context context, double temperature, boolean isMetric) {
         double temperatureLoc;
         if ( !isMetric ) {
             temperatureLoc = 9*temperature/5+32;

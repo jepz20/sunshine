@@ -1,9 +1,14 @@
 package com.example.joseperdomo.sunshine.app;
 
+import android.app.AlarmManager;
+import android.app.PendingIntent;
+import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Bundle;
+import android.preference.PreferenceManager;
 import android.support.v4.app.Fragment;
 import android.support.v4.app.LoaderManager;
 import android.support.v4.content.CursorLoader;
@@ -22,6 +27,7 @@ import com.example.joseperdomo.sunshine.app.data.WeatherContract;
 import com.example.joseperdomo.sunshine.app.data.WeatherContract.LocationEntry;
 import com.example.joseperdomo.sunshine.app.data.WeatherContract.WeatherEntry;
 import com.example.joseperdomo.sunshine.app.service.SunshineService;
+import com.example.joseperdomo.sunshine.app.sync.SunshineSyncAdapter;
 
 import java.util.Date;
 
@@ -56,6 +62,16 @@ public class ForecastFragment extends Fragment implements LoaderManager.LoaderCa
     public static final int COL_WEATHER_MIN_TEMP = 4;
     public static final int COL_LOCATION_SETTING = 5;
 
+    private static final String[] LOCATION_COORD= new String[] {
+            LocationEntry.COLUMN_COORD_LAT,
+            LocationEntry.COLUMN_COORD_LONG,
+    };
+
+    // these indices must match the projection
+    private static final int INDEX_COORD_LAT = 0;
+    private static final int INDEX_COORD_LONG = 1;
+
+
     public ForecastAdapter mForecastAdapter;
 
     public interface Callback {
@@ -88,6 +104,10 @@ public class ForecastFragment extends Fragment implements LoaderManager.LoaderCa
         int id = item.getItemId();
         if (id == R.id.action_refresh) {
             updateWeather();
+            return true;
+        }
+        if (id == R.id.action_map) {
+            openPreferredLocationInMap();
             return true;
         }
         return super.onOptionsItemSelected(item);
@@ -133,13 +153,9 @@ public class ForecastFragment extends Fragment implements LoaderManager.LoaderCa
     }
 
     public void updateWeather() {
-        Intent intent = new Intent(getActivity(), SunshineService.class);
-        intent .putExtra(SunshineService.LOCATION_QUERY_EXTRA, Utility.getPreferredLocation(getActivity()));
-        getActivity().startService(intent);
-//        FetchWeatherTask task = new FetchWeatherTask(getActivity());
-//        String postal = Utility.getPreferredLocation(getActivity());
-//        //94043
-//        task.execute(postal);
+
+
+        SunshineSyncAdapter.syncImmediately(getActivity());
     }
 
 //    @Override
@@ -151,7 +167,6 @@ public class ForecastFragment extends Fragment implements LoaderManager.LoaderCa
 
     @Override
     public void onSaveInstanceState(Bundle outState) {
-        Log.v(LOG_TAG, " onSaveInstanceState la posicion que quiero guardar es: " + mPosition);
         if (mPosition != ListView.INVALID_POSITION){
             outState.putInt(POSITION, mPosition);
         }
@@ -215,4 +230,28 @@ public class ForecastFragment extends Fragment implements LoaderManager.LoaderCa
             getLoaderManager().restartLoader(FORECAST_LOADER,null,this);
         }
     }
+
+    public void openPreferredLocationInMap () {
+        String location = Utility.getPreferredLocation(getActivity());
+        Cursor coordCur = getActivity().getContentResolver().query(LocationEntry.CONTENT_URI,
+                LOCATION_COORD,
+                LocationEntry.COLUMN_LOCATION_SETTING + "=?",
+                new String[] {location},
+                null);
+        if (coordCur.moveToFirst()) {
+            String sLat = coordCur.getString(INDEX_COORD_LAT);
+            String sLong = coordCur.getString(INDEX_COORD_LONG);
+            Intent intent = new Intent(Intent.ACTION_VIEW);
+            Uri loc = Uri.parse("geo:" + sLat + "," + sLong + "?").buildUpon()
+                    .appendQueryParameter("q", location)
+                    .build();
+            intent.setData(loc);
+            if (intent.resolveActivity(getActivity().getPackageManager()) != null) {
+                startActivity(intent);
+            } else {
+                Log.d(LOG_TAG, "Couldn't call " + location + ":(");
+            }
+        }
+    }
+
 }
